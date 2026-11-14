@@ -1,0 +1,17 @@
+# SSH Keys & Putty Keys (절대 업로드 금지)
+*.key
+*.pub
+*.ppk
+*.pem
+
+# Rclone & Cloud Credentials
+rclone.conf
+*secret*.yaml
+*.env
+.env*
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+mermaid-diagram.png
