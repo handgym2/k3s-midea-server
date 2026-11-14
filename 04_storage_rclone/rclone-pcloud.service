@@ -1,0 +1,29 @@
+[Unit]
+Description=Rclone pCloud Mount (Jellyfin Media)
+Documentation=https://rclone.org/commands/rclone_mount/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/rclone mount "pcloud:Anime/일 반  애 니" /mnt/pcloud \
+    --config=/etc/rclone/rclone.conf \
+    --allow-other \
+    --read-only \
+    --vfs-cache-mode full \
+    --vfs-cache-max-size 25G \
+    --vfs-cache-max-age 24h \
+    --vfs-read-ahead 128M \
+    --buffer-size 64M \
+    --dir-cache-time 72h \
+    --poll-interval 1m \
+    --umask 022 \
+    --log-level INFO \
+    --log-file /var/log/rclone.log
+ExecStop=/bin/fusermount3 -u -z /mnt/pcloud
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

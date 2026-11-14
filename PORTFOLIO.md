@@ -142,9 +142,45 @@ sudo apt update && sudo apt install -y curl wget vim nano htop iotop net-tools
 
 ![K3s 설치 후 80/443 포트 활성화 검증](./03_kubernetes_k3s/screenshots/05_after_k3s_port_test.png)
 
+### 2.5 선언적 매니페스트 기반 네임스페이스(`dmz`, `internal`) 격리 및 라벨 검증
+
+* **IaC 선언적 배포**:
+  * 단순 CLI가 아닌 `01_namespaces.yaml` 매니페스트를 작성하여 `zone=dmz`, `zone=internal` 및 `security-tier` 보안 라벨을 선언.
+  * 서버의 `~/manifests/` 디렉토리에서 `sudo kubectl apply -f namespaces.yaml`로 배포 완료.
+  * `sudo kubectl get namespaces --show-labels` 실행 결과, `dmz` 및 `internal` 네임스페이스가 지정된 보안 라벨과 함께 `Active` 상태로 정상 생성됨을 확인.
+
+| ① nano 선언적 네임스페이스 YAML 작성 | ② `kubectl apply` 배포 완료 |
+| :---: | :---: |
+| ![namespaces.yaml 작성](./03_kubernetes_k3s/screenshots/06_setup_namespaces.png) | ![네임스페이스 배포](./03_kubernetes_k3s/screenshots/07_namespaces_created.png) |
+
+![보안 티어 라벨 적용 검증 완료](./03_kubernetes_k3s/screenshots/08_namespaces_labels_verified.png)
+
+### 2.6 대용량 클라우드 스토리지(pCloud 11TB) Rclone VFS 마운트 및 고성능 스트리밍 캐시 구축
+
+* **스토리지 최소 권한(Least Privilege) & 무결성 보장**:
+  * pCloud 최상위 전체가 아닌 미디어 전용 하위 디렉터리(`Anime/일 반  애 니`)만을 타겟팅하여 개인 문서/백업 데이터로의 접근 경로를 원천 격리.
+  * 파일시스템 레벨에서 `--read-only` 옵션을 적용하여 컨테이너 파드 또는 악의적인 침입자에 의한 원본 클라우드 데이터 손상/삭제 가능성을 원천 차단.
+* **고성능 VFS 스트리밍 캐시 최적화**:
+  * `--vfs-cache-mode full`: 대용량 동영상(1080p FHD/4K)의 실시간 탐색(Seek/Range Request)을 로컬 블록 장치 수준으로 캐싱하여 버퍼링 제로화.
+  * `--vfs-cache-max-size 25G`: 100GB 부트 볼륨의 안정성을 지키면서 약 25~50화 분량의 영상을 SSD 속도로 서빙.
+  * `--vfs-read-ahead 128M`, `--buffer-size 64M`: 스트리밍 시작 시 초기 지연 시간(TTFB) 단축.
+* **보안 자격 증명 보호 및 시스템 데몬화**:
+  * `chmod 600 /etc/rclone/rclone.conf`: OAuth2 토큰이 저장된 설정 파일을 root 전용 권한으로 봉인.
+  * `rclone-pcloud.service` systemd 데몬 등록을 통해 24x365 무중단 자동 마운트 및 실패 시 자동 복구 보장.
+  * `df -h` 명령어로 총 11TB 규모의 클라우드 저장소가 로컬 `/mnt/pcloud` 경로에 87% 사용량(9.5TB 사용 / 1.6TB 가용)으로 정상 마운트됨을 검증 완료.
+
+| ① Rclone v1.76.0 ARM64 설치 | ② 헤드리스 OAuth2 토큰 발급 |
+| :---: | :---: |
+| ![rclone 설치](./04_storage_rclone/screenshots/01_rclone_installed.png) | ![원격 토큰 발급](./04_storage_rclone/screenshots/02_rclone_config_remote_token.png) |
+
+| ③ pCloud 타겟 폴더 디렉터리 조회 (`lsd`) | ④ systemd 서비스 활성화 (`active running`) |
+| :---: | :---: |
+| ![pCloud 디렉터리 확인](./04_storage_rclone/screenshots/04_rclone_pcloud_lsd_verified.png) | ![rclone 서비스 활성화](./04_storage_rclone/screenshots/05_rclone_service_active.png) |
+
+![11TB pCloud 파일시스템 마운트 용량 확인](./04_storage_rclone/screenshots/06_df_h_pcloud_mounted.png)
+
 ---
 
 ## 3. 향후 기록 예정 항목
-* **네임스페이스 격리**: `dmz` / `internal` 네임스페이스 분리 및 `kubectl` 조회 캡처
-* **스토리지 가상화**: `rclone` pCloud VFS 캐시 마운트(`--vfs-cache-max-size 30G`) 및 Jellyfin Direct Play 검증
+* **Jellyfin 미디어 서버 배포**: DMZ 네임스페이스 내 파드 배포, `/mnt/pcloud` 볼륨 마운트 및 Traefik 인그레스 연동
 * **Choke Firewall & 침투 테스트**: `NetworkPolicy` 적용 후 DMZ Pod 내부에서 `nmap` 스캔을 통한 DB/모니터링 차단 증빙

@@ -116,17 +116,17 @@ flowchart LR
 - [x] Security List 수신(`Ingress`) 규칙에 `80/TCP`, `443/TCP` 추가 완료 (`ICMP Type 8 ping` 차단 유지)
 - [x] 외부 포트 도달 검증 (`iptables -L INPUT -v` 패킷 증가 + `6443` 차단 + K3s 설치 전 `Test-NetConnection` 기준선 확보, K3s 설치 후 최종 `True`/`nmap` 재검증 예정)
 
-### Phase 4: k3s 설치 (진행 중)
+### Phase 4: k3s 설치 (완료)
 - [x] k3s 단일 노드 설치 (`v1.37.2+k3s1`, `systemd` 서비스 등록 및 노드 `Ready` 확인)
 - [x] `Traefik` 인그레스 컨트롤러 구동 및 외부 포트(`80`, `443`) 리스닝 검증 (`TcpTestSucceeded : True`)
-- [ ] 네임스페이스 `dmz`, `internal` 생성
+- [x] 네임스페이스 `dmz`, `internal` 선언적 YAML 배포 및 보안 티어 라벨(`zone=dmz`, `zone=internal`) 적용 확인
 - [ ] `kubeconfig` 내 PC 복사 및 SSH 터널(`-L 6443:localhost:6443`) 연동 (선택)
 - [ ] Helm 설치
 
-### Phase 5: pCloud 연동 (호스트)
-- [ ] `rclone` 설치 후 `rclone config`로 pCloud 연결
-- [ ] `systemd` 서비스로 `/mnt/pcloud` 자동 마운트 (`--read-only --vfs-cache-mode full --vfs-cache-max-size 30G --vfs-cache-max-age 24h --allow-other`)
-- [ ] 재부팅 후 자동 마운트 확인
+### Phase 5: pCloud 연동 (호스트 — 완료)
+- [x] `rclone` ARM64 설치 후 `rclone config`로 pCloud 연결 (헤드리스 OAuth2 토큰 발급)
+- [x] `systemd` 서비스(`rclone-pcloud.service`)로 `/mnt/pcloud` 자동 마운트 (`Anime/일 반  애 니` 전용 격리, `--read-only --vfs-cache-mode full --vfs-cache-max-size 25G --vfs-cache-max-age 24h --allow-other`)
+- [x] `df -h` 명령어로 총 11TB 규모 파일시스템 정상 마운트 검증 완료 (87% 사용, 9.5TB 사용 / 1.6TB 가용)
 
 ### Phase 6: Jellyfin 배포 (`dmz`)
 - [ ] Deployment 작성 (`hostPath` readOnly + `mountPropagation: HostToContainer`, non-root, `allowPrivilegeEscalation: false`, `automountServiceAccountToken: false`)

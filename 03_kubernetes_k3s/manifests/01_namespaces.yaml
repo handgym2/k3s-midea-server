@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dmz
+  labels:
+    zone: dmz
+    security-tier: public-facing
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: internal
+  labels:
+    zone: internal
+    security-tier: private-isolated

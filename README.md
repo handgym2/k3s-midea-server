@@ -220,6 +220,15 @@ kubectl get pods -A
 
 ![K3s 설치 후 80/443 포트 활성화 검증](./03_kubernetes_k3s/screenshots/05_after_k3s_port_test.png)
 
+* **이중 방화벽 구역 격리를 위한 선언적 네임스페이스 배포 (IaC)**  
+  단순 CLI 생성이 아닌 선언적 YAML 매니페스트([01_namespaces.yaml](./03_kubernetes_k3s/manifests/01_namespaces.yaml))를 작성하여 `dmz`와 `internal` 구역을 분리 배포했습니다. 나중에 2차 방화벽(`NetworkPolicy`)에서 정밀한 라벨 기반 격리 룰(`matchLabels`)을 적용할 수 있도록 보안 티어 라벨(`zone=dmz`, `zone=internal`)을 부여하고 검증을 완료했습니다.
+
+| ① nano 선언적 네임스페이스 YAML 작성 | ② `kubectl apply` 배포 완료 |
+| :---: | :---: |
+| ![namespaces.yaml 작성](./03_kubernetes_k3s/screenshots/06_setup_namespaces.png) | ![네임스페이스 배포](./03_kubernetes_k3s/screenshots/07_namespaces_created.png) |
+
+![보안 티어 라벨 적용 검증 완료](./03_kubernetes_k3s/screenshots/08_namespaces_labels_verified.png)
+
 ---
 
 ## 5. 디렉토리 구조 (Repository Structure)
@@ -243,14 +252,26 @@ midea server/
 │       └── 03_instance_scaleup_verified.jpg
 ├── 03_kubernetes_k3s/                # k3s 매니페스트 및 클러스터 검증 캡처
 │   ├── manifests/
+│   │   └── 01_namespaces.yaml
 │   └── screenshots/
 │       ├── 01_before_k3s_port_test.png
 │       ├── 02_k3s_official_install_guide.png
 │       ├── 03_k3s_service_running.png
 │       ├── 04_k3s_nodes_pods_ready.png
-│       └── 05_after_k3s_port_test.png
+│       ├── 05_after_k3s_port_test.png
+│       ├── 06_setup_namespaces.png
+│       ├── 07_namespaces_created.png
+│       └── 08_namespaces_labels_verified.png
 ├── 04_storage_rclone/                # pCloud 마운트 서비스 및 VFS 캐시 가이드
+│   ├── README.md
+│   ├── rclone-pcloud.service
 │   └── screenshots/
+│       ├── 01_rclone_installed.png
+│       ├── 02_rclone_config_remote_token.png
+│       ├── 03_rclone_remote_saved.png
+│       ├── 04_rclone_pcloud_lsd_verified.png
+│       ├── 05_rclone_service_active.png
+│       └── 06_df_h_pcloud_mounted.png
 ├── 05_security_firewall/             # NetworkPolicy YAML 및 방화벽 검증 보고서
 │   ├── network_policies/
 │   └── screenshots/
@@ -269,8 +290,8 @@ midea server/
 - [x] **Phase 1**: Ampere A1 인스턴스 확보, 공인 IP 할당(`147.224.xx.xx`), 2 OCPU / 12GB 스케일업
 - [x] **Phase 2**: SSH 접속, OS 패키지 업그레이드·보안 업데이트(`unattended-upgrades`), `iptables` 80/443 및 K3s CIDR 허용(`netfilter-persistent save`) 완료
 - [x] **Phase 3**: Screening Firewall (OCI Security List `Ingress` 80/443 개방, `iptables -L INPUT -v` 패킷 도달 및 K3s 설치 전 포트 기준선 확인) 완료
-- [x] **Phase 4**: k3s 단일 노드 클러스터 설치 (`v1.37.2+k3s1`), `Traefik` 인그레스 구동 및 `80`·`443` 외부 연결(`TcpTestSucceeded: True`) 검증 완료 / 네임스페이스(`dmz`, `internal`) 구성 준비
-- [ ] **Phase 5**: `rclone` pCloud 연동 및 systemd 자동 마운트 (`--vfs-cache-max-size 30G`)
+- [x] **Phase 4**: k3s 단일 노드 클러스터 설치 (`v1.37.2+k3s1`), `Traefik` 인그레스 구동, `80`·`443` 외부 연결(`TcpTestSucceeded: True`) 검증 및 보안 티어 라벨 기반 네임스페이스(`dmz`, `internal`) 선언적 YAML 배포 완료
+- [x] **Phase 5**: `rclone` pCloud 11TB 연동, VFS 25GB 고속 캐시 및 systemd 자동 마운트 서비스(`rclone-pcloud.service`) 완료 (`df -h` 검증)
 - [ ] **Phase 6**: Jellyfin 배포 (non-root, `hostPath` readOnly, SA 토큰 비활성화) 및 Direct Play 테스트
 - [ ] **Phase 7**: 도메인 연결, cert-manager + Let's Encrypt HTTPS 적용, 로그인 보호(fail2ban/CrowdSec)
 - [ ] **Phase 8**: `internal` 구역 `Jellystat` (시청 통계 API) + `PostgreSQL` (DB) 및 `kube-prometheus-stack` (Prometheus + Grafana) 배포
