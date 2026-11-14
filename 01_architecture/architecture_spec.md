@@ -24,9 +24,10 @@ flowchart LR
         NP["Kubernetes NetworkPolicy<br/>[Choke Firewall - 2차 방어 (Zero-Trust)]"]
 
         subgraph INT["namespace: internal (내부 격리 구역)"]
-            API["내부 API Pod (더미 타겟)"]
-            DB["내부 DB Pod (비공개 데이터 타겟)"]
+            API["Jellystat API Pod (시청 통계 수집)"]
+            DB["PostgreSQL DB Pod (시청 기록 원본 DB)"]
             MON["Prometheus & Grafana (모니터링)"]
+            API -->|"5432/TCP"| DB
         end
 
         JF -.->|"특정 허용 포트만 통과"| NP --> API

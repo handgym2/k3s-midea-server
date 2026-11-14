@@ -54,9 +54,10 @@ flowchart LR
         NP["Kubernetes NetworkPolicy<br/>[Choke Firewall · 2차 방어 (Default-Deny)]"]
 
         subgraph INT["namespace: internal (내부 격리망)"]
-            API["내부 API Pod (연습/검증용)"]
-            DB["내부 DB Pod (비공개 타겟)"]
+            API["Jellystat API Pod<br/>(시청 통계 · 이력 수집)"]
+            DB["PostgreSQL DB Pod<br/>(시청 기록 원본 저장)"]
             MON["Prometheus + Grafana"]
+            API -->|"5432/TCP"| DB
         end
 
         JF -.->|"허용 포트만 통과"| NP --> API
@@ -74,13 +75,13 @@ flowchart LR
 | **Screening Firewall (1차 방어)** | **OCI Security List** + Ubuntu `iptables` | 외부에서 유입되는 트래픽 중 허용된 포트(22, 80, 443)만 통과 |
 | **Screened Subnet (DMZ)** | Kubernetes `dmz` 네임스페이스 (`Traefik`, `Jellyfin`) | 인터넷에 노출되는 서비스만 격리 배치 |
 | **Choke Firewall (2차 방어)** | Kubernetes **NetworkPolicy** (`Default-Deny`) | DMZ 서비스가 탈취되더라도 내부 구역으로의 횡적 이동(Lateral Movement) 차단 |
-| **Internal LAN (내부망)** | Kubernetes `internal` 네임스페이스 (`API`, `DB`, `Grafana`) | 외부 직접 접근이 차단된 내부 서비스 및 모니터링 계층 |
+| **Internal LAN (내부망)** | Kubernetes `internal` 네임스페이스 (`Jellystat API`, `PostgreSQL DB`, `Grafana`) | 외부 직접 접근이 차단된 시청 통계 DB 및 모니터링 계층 |
 
-### 2.3 초기 설계 구상도 (멀티 노드 참조 모델 → 단일 노드 최적화)
+### 2.3 전체 아키텍처 다이어그램 (시각화 요약)
 
-> 초기 멀티 노드(VM 3대) 구상안을 2026년 6월 개정된 OCI Always Free 한도(2 OCPU / 12GB)에 맞춰 단일 노드 네임스페이스 분리(B안)로 최적화했습니다.
+> Oracle Cloud Always Free 한도(2 OCPU / 12GB)에 최적화한 **단일 노드 k3s 네임스페이스(`dmz` / `internal`) 분리 구조**와, 실제 미디어 시청 통계를 수집하는 **`Jellystat (API)` + `PostgreSQL (DB)`** 연계 흐름을 한눈에 정리한 구성도입니다.
 
-![초기 아키텍처 구상도](./01_architecture/network_diagram.jpg)
+![전체 아키텍처 다이어그램](./01_architecture/network_diagram.jpg)
 
 ---
 
@@ -189,6 +190,38 @@ sudo diff -u /etc/iptables/rules.v4.bak /etc/iptables/rules.v4
 
 ---
 
+### 4.6 K3s 단일 노드 클러스터 구축 및 포트 활성화 검증 (Phase 4)
+
+공식 설치 스크립트를 활용해 경량 쿠버네티스(k3s)를 단일 노드로 설치하고, 내장된 `Traefik` 인그레스 컨트롤러가 `80`·`443` 포트를 성공적으로 수신 대기(Listen)하는 것을 확인했습니다.
+
+```bash
+# 1. k3s 공식 스크립트 설치
+curl -sfL https://get.k3s.io | sh -
+
+# 2. 일반 유저(ubuntu) kubectl 권한 부여
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+
+# 3. 노드 및 기본 시스템 파드 상태 확인
+kubectl get nodes -o wide
+kubectl get pods -A
+```
+
+| ① k3s 공식 설치 스크립트 가이드 | ② k3s systemd 서비스 활성화 (`active (running)`) |
+| :---: | :---: |
+| ![k3s 공식 설치 가이드](./03_kubernetes_k3s/screenshots/02_k3s_official_install_guide.png) | ![k3s 서비스 가동 확인](./03_kubernetes_k3s/screenshots/03_k3s_service_running.png) |
+
+* **노드 및 시스템 파드 준비 완료 (`Ready` & `Running`)**  
+  컨트롤 플레인 노드(`k3s-main`, `v1.37.2+k3s1`)가 `Ready` 상태로 가동되었으며, CoreDNS 및 웹 트래픽 라우팅을 담당하는 `svclb-traefik (2/2)`과 `traefik (1/1)`이 정상 구동되었습니다.
+
+![k3s 노드 및 시스템 파드 구동 완료](./03_kubernetes_k3s/screenshots/04_k3s_nodes_pods_ready.png)
+
+* **Before / After 포트 연결성 검증 (`TcpTestSucceeded: True`)**  
+  K3s 설치 전에는 포트 리스너가 없어 `False`였던 `Test-NetConnection` 결과가, K3s의 `Traefik` 가동 직후 외부(내 PC)에서 **`80`번(HTTP)과 `443`번(HTTPS) 모두 `TcpTestSucceeded : True`로 정상 전환**된 것을 확인했습니다.
+
+![K3s 설치 후 80/443 포트 활성화 검증](./03_kubernetes_k3s/screenshots/05_after_k3s_port_test.png)
+
+---
+
 ## 5. 디렉토리 구조 (Repository Structure)
 
 > ※ 보안 정책(`.gitignore`)에 따라 SSH 비밀키(`*.key`, `*.ppk`), 공개키(`*.pub`), 클라우드 인증 정보(`rclone.conf`)는 저장소에 업로드되지 않습니다.
@@ -211,7 +244,11 @@ midea server/
 ├── 03_kubernetes_k3s/                # k3s 매니페스트 및 클러스터 검증 캡처
 │   ├── manifests/
 │   └── screenshots/
-│       └── 01_before_k3s_port_test.png
+│       ├── 01_before_k3s_port_test.png
+│       ├── 02_k3s_official_install_guide.png
+│       ├── 03_k3s_service_running.png
+│       ├── 04_k3s_nodes_pods_ready.png
+│       └── 05_after_k3s_port_test.png
 ├── 04_storage_rclone/                # pCloud 마운트 서비스 및 VFS 캐시 가이드
 │   └── screenshots/
 ├── 05_security_firewall/             # NetworkPolicy YAML 및 방화벽 검증 보고서
@@ -232,10 +269,10 @@ midea server/
 - [x] **Phase 1**: Ampere A1 인스턴스 확보, 공인 IP 할당(`147.224.xx.xx`), 2 OCPU / 12GB 스케일업
 - [x] **Phase 2**: SSH 접속, OS 패키지 업그레이드·보안 업데이트(`unattended-upgrades`), `iptables` 80/443 및 K3s CIDR 허용(`netfilter-persistent save`) 완료
 - [x] **Phase 3**: Screening Firewall (OCI Security List `Ingress` 80/443 개방, `iptables -L INPUT -v` 패킷 도달 및 K3s 설치 전 포트 기준선 확인) 완료
-- [ ] **Phase 4**: k3s 단일 노드 클러스터 설치 및 `dmz` / `internal` 네임스페이스 분리
+- [x] **Phase 4**: k3s 단일 노드 클러스터 설치 (`v1.37.2+k3s1`), `Traefik` 인그레스 구동 및 `80`·`443` 외부 연결(`TcpTestSucceeded: True`) 검증 완료 / 네임스페이스(`dmz`, `internal`) 구성 준비
 - [ ] **Phase 5**: `rclone` pCloud 연동 및 systemd 자동 마운트 (`--vfs-cache-max-size 30G`)
 - [ ] **Phase 6**: Jellyfin 배포 (non-root, `hostPath` readOnly, SA 토큰 비활성화) 및 Direct Play 테스트
 - [ ] **Phase 7**: 도메인 연결, cert-manager + Let's Encrypt HTTPS 적용, 로그인 보호(fail2ban/CrowdSec)
-- [ ] **Phase 8**: `internal` 구역 더미 API/DB 및 `kube-prometheus-stack` (Prometheus + Grafana) 배포
+- [ ] **Phase 8**: `internal` 구역 `Jellystat` (시청 통계 API) + `PostgreSQL` (DB) 및 `kube-prometheus-stack` (Prometheus + Grafana) 배포
 - [ ] **Phase 9**: Choke Firewall (`NetworkPolicy` default-deny + 최소 허용 규칙) 적용
 - [ ] **Phase 10**: DMZ Pod 내부에서 `nmap` 모의 침투 스캔 및 차단 결과 증빙 보고서 작성

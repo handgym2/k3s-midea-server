@@ -24,9 +24,10 @@ flowchart LR
         NP["Kubernetes NetworkPolicy<br/>[Choke Firewall · 2차 방어]"]
 
         subgraph INT["namespace: internal (내부 격리망)"]
-            API["내부 API Pod (연습용)"]
-            DB["내부 DB Pod (비공개 타겟)"]
+            API["Jellystat API Pod<br/>(시청 통계 수집)"]
+            DB["PostgreSQL DB Pod<br/>(시청 기록 원본 DB)"]
             MON["Prometheus + Grafana"]
+            API -->|"5432/TCP"| DB
         end
 
         JF -.->|"허용 포트만 통과"| NP --> API
@@ -118,10 +119,32 @@ sudo apt update && sudo apt install -y curl wget vim nano htop iotop net-tools
 
 ![K3s 설치 전 80/443 포트 응답 대기 상태 확인](./03_kubernetes_k3s/screenshots/01_before_k3s_port_test.png)
 
+### 2.4 K3s 단일 노드 클러스터 구축 및 포트 활성화 검증
+
+* **공식 스크립트 기반 설치**:
+  ```bash
+  curl -sfL https://get.k3s.io | sh -
+  sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+  ```
+* **서비스 가동 및 노드 준비 확인**:
+  * `systemctl status k3s` 명령으로 `k3s.service`가 `active (running)` 상태임을 확인.
+  * `kubectl get nodes -o wide` 실행 결과, `k3s-main` 노드가 `Ready` 상태(`v1.37.2+k3s1`)로 정상 등록됨.
+  * `kubectl get pods -A` 실행 결과, `CoreDNS`, `metrics-server`, `local-path-provisioner` 및 웹 트래픽 라우팅을 담당하는 `svclb-traefik (2/2)`, `traefik (1/1)`이 정상 `Running` 상태로 올라옴.
+
+![k3s 공식 설치 가이드](./03_kubernetes_k3s/screenshots/02_k3s_official_install_guide.png)
+
+![k3s 서비스 가동 확인](./03_kubernetes_k3s/screenshots/03_k3s_service_running.png)
+
+![k3s 노드 및 시스템 파드 구동 완료](./03_kubernetes_k3s/screenshots/04_k3s_nodes_pods_ready.png)
+
+* **외부 포트 활성화 Before / After 비교**:
+  * K3s 설치 전 `Test-NetConnection` 결과가 리스너 부재로 `False`였던 상태에서, `Traefik` 구동 후 `80`번(HTTP) 및 `443`번(HTTPS) 모두 `TcpTestSucceeded : True`로 전환됨을 확인.
+
+![K3s 설치 후 80/443 포트 활성화 검증](./03_kubernetes_k3s/screenshots/05_after_k3s_port_test.png)
+
 ---
 
 ## 3. 향후 기록 예정 항목
-* **Screening Firewall**: OCI Security List 수신 규칙(22, 80, 443) 및 Ubuntu `iptables` 영구 저장 검증
-* **k3s 클러스터**: 단일 노드 설치 및 `dmz` / `internal` 네임스페이스 분리 캡처
+* **네임스페이스 격리**: `dmz` / `internal` 네임스페이스 분리 및 `kubectl` 조회 캡처
 * **스토리지 가상화**: `rclone` pCloud VFS 캐시 마운트(`--vfs-cache-max-size 30G`) 및 Jellyfin Direct Play 검증
 * **Choke Firewall & 침투 테스트**: `NetworkPolicy` 적용 후 DMZ Pod 내부에서 `nmap` 스캔을 통한 DB/모니터링 차단 증빙

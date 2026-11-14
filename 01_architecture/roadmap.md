@@ -29,9 +29,10 @@ flowchart LR
         end
         NP["NetworkPolicy<br/>Choke Firewall"]
         subgraph INT["namespace: internal"]
-            API["API (연습용)"]
-            DB["DB (연습용)"]
+            API["Jellystat API<br/>(시청 통계 수집)"]
+            DB["PostgreSQL DB<br/>(시청 기록 원본)"]
             MON["Prometheus + Grafana"]
+            API -->|"5432"| DB
         end
         RC["rclone mount (호스트)<br/>/mnt/pcloud read-only"]
         JF -->|"hostPath"| RC
@@ -56,7 +57,7 @@ flowchart LR
 | **Screening Firewall** | **OCI Security List** (+ VM 안의 `iptables`) |
 | Screened Subnet (DMZ) | `dmz` 네임스페이스 (`Traefik`, `Jellyfin`) |
 | **Choke Firewall** | **NetworkPolicy** (`default-deny`) |
-| 내부망 (LAN) | `internal` 네임스페이스 (`API`, `DB`, `Grafana`) |
+| 내부망 (LAN) | `internal` 네임스페이스 (`Jellystat API`, `PostgreSQL DB`, `Grafana`) |
 
 ---
 
@@ -79,7 +80,7 @@ flowchart LR
 | Jellyfin | 1 ~ 3 GB | `4Gi` |
 | rclone (호스트) | 약 0.5 GB | 캐시 상한 `30G` 디스크 제한 |
 | Prometheus + Grafana | 약 1.5 ~ 2 GB | Prometheus `1Gi`, Grafana `256Mi` |
-| API + DB (더미 타겟) | 약 0.2 ~ 1 GB | 각 `512Mi` |
+| Jellystat (API) + PostgreSQL (DB) | 약 0.3 ~ 0.8 GB | 각 `512Mi` |
 | **합계** | **약 5 ~ 8 GB / 12 GB** | 여유 4 GB 이상 |
 
 ---
@@ -115,11 +116,12 @@ flowchart LR
 - [x] Security List 수신(`Ingress`) 규칙에 `80/TCP`, `443/TCP` 추가 완료 (`ICMP Type 8 ping` 차단 유지)
 - [x] 외부 포트 도달 검증 (`iptables -L INPUT -v` 패킷 증가 + `6443` 차단 + K3s 설치 전 `Test-NetConnection` 기준선 확보, K3s 설치 후 최종 `True`/`nmap` 재검증 예정)
 
-### Phase 4: k3s 설치
-- [ ] k3s 단일 노드 설치
-- [ ] `kubeconfig`를 내 PC로 복사 후 SSH 터널(`-L 6443:localhost:6443`)로 `kubectl` 연결
-- [ ] Helm 설치
+### Phase 4: k3s 설치 (진행 중)
+- [x] k3s 단일 노드 설치 (`v1.37.2+k3s1`, `systemd` 서비스 등록 및 노드 `Ready` 확인)
+- [x] `Traefik` 인그레스 컨트롤러 구동 및 외부 포트(`80`, `443`) 리스닝 검증 (`TcpTestSucceeded : True`)
 - [ ] 네임스페이스 `dmz`, `internal` 생성
+- [ ] `kubeconfig` 내 PC 복사 및 SSH 터널(`-L 6443:localhost:6443`) 연동 (선택)
+- [ ] Helm 설치
 
 ### Phase 5: pCloud 연동 (호스트)
 - [ ] `rclone` 설치 후 `rclone config`로 pCloud 연결
@@ -137,7 +139,7 @@ flowchart LR
 - [ ] 외부 망(LTE)에서 접속 테스트 및 CrowdSec/fail2ban 적용
 
 ### Phase 8: 내부 서비스 및 모니터링 (`internal`)
-- [ ] 더미 API, DB Pod 배포 (Choke 방화벽 검증 타겟)
+- [ ] `Jellystat` (API) + `PostgreSQL` (DB) Pod 배포 (시청 통계 연동 및 Choke 방화벽 격리 검증 대상)
 - [ ] `kube-prometheus-stack` 배포 (보존 기간 7일, 메모리 limit 설정)
 - [ ] Grafana는 `kubectl port-forward`로만 접근
 
