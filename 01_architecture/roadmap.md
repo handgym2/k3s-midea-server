@@ -102,7 +102,9 @@ flowchart LR
 - [x] OCI Ubuntu 이미지의 `iptables`에서 80/443 및 K3s CIDR(`10.42.0.0/16`, `10.43.0.0/16`) 허용, `FORWARD` 기본 차단 해제 및 `netfilter-persistent save`
 - [x] 자동 보안 업데이트(`unattended-upgrades` active) 및 SSH 비밀번호 로그인 비활성화(`PasswordAuthentication no`, `KbdInteractiveAuthentication no`) 확인
 
-### Phase 3: Screening Firewall (OCI Security List)
+> **왜 `iptables`를 열어야 하나요?** 일반 클라우드 우분투와 달리 OCI 우분투 이미지는 출고 시점부터 OS 내부 `iptables`(현관문)가 `22(SSH)` 외 모든 트래픽을 `REJECT`로 막고 있어, OCI 콘솔(정문)과 별개로 웹 표준 포트(`80`, `443`)와 K3s CIDR(`10.42.0.0/16`, `10.43.0.0/16`)을 `REJECT` 규칙보다 위쪽 번호에 열어주어야 정상 통신됩니다.
+
+### Phase 3: Screening Firewall (OCI Security List — 완료)
 | 포트 | 출발지 | 용도 |
 | :--- | :--- | :--- |
 | 22/TCP | **내 집 IP/32** (권장) | SSH |
@@ -110,8 +112,8 @@ flowchart LR
 | 443/TCP | `0.0.0.0/0` | Jellyfin (HTTPS) |
 | 그 외 | 차단 | `6443`(kube API)은 SSH 터널로만 접근 |
 
-- [ ] Security List 수신 규칙 추가
-- [ ] 외부에서 `nmap`으로 확인 → 22(내 IP), 80, 443만 열려 있는지 검증
+- [x] Security List 수신(`Ingress`) 규칙에 `80/TCP`, `443/TCP` 추가 완료 (`ICMP Type 8 ping` 차단 유지)
+- [x] 외부 포트 도달 검증 (`iptables -L INPUT -v` 패킷 증가 + `6443` 차단 + K3s 설치 전 `Test-NetConnection` 기준선 확보, K3s 설치 후 최종 `True`/`nmap` 재검증 예정)
 
 ### Phase 4: k3s 설치
 - [ ] k3s 단일 노드 설치

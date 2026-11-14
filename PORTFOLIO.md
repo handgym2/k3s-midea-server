@@ -88,6 +88,36 @@ sudo apt update && sudo apt install -y curl wget vim nano htop iotop net-tools
 | `iotop` | `rclone` VFS 캐시 쓰기/읽기 시 디스크 I/O 병목 분석 |
 | `net-tools` | `netstat`, `ifconfig`, `route` 등 네트워크 포트 리스닝 상태 진단 |
 
+### 2.2 OCI Ubuntu 내부 방화벽(`iptables`) 설정 이유 및 적용 내역
+
+* **배경 (정문 vs 현관문)**: 일반 클라우드(AWS 등)의 우분투는 현관문(`iptables`)이 기본적으로 열려 있어 클라우드 콘솔(정문)만 열면 되지만, **오라클 클라우드(OCI) 우분투 이미지는 출고 시점부터 현관문(`iptables`)이 `22번(SSH)`만 남기고 전부 강제 잠금(`REJECT --reject-with icmp-host-prohibited`)** 상태로 제공됩니다.
+* **적용 내역 (`/etc/iptables/rules.v4`, 원본 `/etc/iptables/rules.v4.bak` 백업 후 `netfilter-persistent save`)**:
+  1. **`80`, `443` 포트 허용 (`INPUT` 5·6번)**: Jellyfin 웹/앱 접속(HTTPS `443`) 및 인증서 발급·리다이렉트(HTTP `80`)를 위해 추가. `iptables`는 상단 번호부터 순서대로 평가하므로 마지막 `9번 REJECT`보다 **위쪽 번호**에 배치해 통과시키고, 나머지 미허용 포트는 기존처럼 `REJECT`로 방어.
+  2. **K3s Pod/Service 대역 허용 (`INPUT` 7·8번 — `10.42.0.0/16`, `10.43.0.0/16`)**: 파드(Jellyfin, Traefik, CoreDNS)와 쿠버네티스 내부 서비스가 호스트와 통신할 때 `REJECT`에 의해 외부 침입으로 오인·차단되는 것을 방지.
+  3. **`FORWARD` 체인 기본 `REJECT` 제거**: 파드 간 및 외부(`pCloud`) 트래픽 전달 통로의 기본 차단을 해제해 K3s CNI와 이후 2차 방화벽(`NetworkPolicy`)이 정상 동작하도록 조치.
+* **검증 명령어**:
+  ```bash
+  sudo iptables -L INPUT -n -v --line-numbers
+  sudo iptables -L FORWARD -n -v --line-numbers
+  sudo diff -u /etc/iptables/rules.v4.bak /etc/iptables/rules.v4
+  ```
+
+![Ubuntu iptables rules.v4 설정 확인](./05_security_firewall/screenshots/01_iptables_rules_v4.png)
+
+### 2.3 Screening Firewall (OCI Security List) 구성 및 K3s 설치 전 포트 검증
+
+* **Ingress Rules 개방 (`80/TCP`, `443/TCP`)**:
+  * 클라이언트(폰·PC)가 먼저 접속을 시작하는 구조이므로 Stateful 방화벽인 OCI Security List의 **`Ingress Rules`**에 `0.0.0.0/0` → Destination `80`, `443`을 추가 (`Source Port Range`는 임의 포트 허용을 위해 빈칸/`All`).
+  * 기본 `ICMP` 규칙은 Type `3, 4`만 허용되어 `ping` (Type `8`) 응답은 차단 상태 유지.
+* **K3s 설치 전 방화벽 통과 검증**:
+  * 외부 `curl` 테스트로 VM 내 `iptables -L INPUT -n -v`의 80·443 `pkts` 카운터 증가(`0 → 5`, `0 → 3`)를 확인해 OCI Security List 통과를 검증했고, 아직 리스닝 데몬(Traefik)이 없어 `Test-NetConnection` 기준선(`TcpTestSucceeded : False`)을 기록해 두었습니다.
+
+![OCI Ingress 80/443 규칙 입력](./05_security_firewall/screenshots/02_oci_ingress_port_setup.png)
+
+![OCI Ingress Rules 반영 완료](./05_security_firewall/screenshots/03_oci_ingress_rules_table.png)
+
+![K3s 설치 전 80/443 포트 응답 대기 상태 확인](./03_kubernetes_k3s/screenshots/01_before_k3s_port_test.png)
+
 ---
 
 ## 3. 향후 기록 예정 항목
