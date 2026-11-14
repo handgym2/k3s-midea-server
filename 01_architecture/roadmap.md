@@ -96,11 +96,11 @@ flowchart LR
 - [x] SSH 키 저장 및 PowerShell에서 SSH 접속 확인
 - [x] 2 OCPU / 12 GB RAM / 100 GB 부트 볼륨 구성 완료
 
-### Phase 2: OS 기본 설정 (진행 중)
+### Phase 2: OS 기본 설정 (완료)
 - [x] `sudo apt update && sudo apt install -y curl wget vim nano htop iotop net-tools`
-- [ ] `sudo apt upgrade -y` 및 시간대 확인 (미국 태평양 표준시 유지)
-- [ ] OCI Ubuntu 이미지의 `iptables`에서 80/443 허용 및 `netfilter-persistent save`
-- [ ] 자동 보안 업데이트(`unattended-upgrades`) 및 SSH 비밀번호 로그인 비활성화 확인
+- [x] `sudo apt upgrade -y` 및 시간대 확인 (`Etc/UTC`, 별도 변경 없이 유지)
+- [x] OCI Ubuntu 이미지의 `iptables`에서 80/443 및 K3s CIDR(`10.42.0.0/16`, `10.43.0.0/16`) 허용, `FORWARD` 기본 차단 해제 및 `netfilter-persistent save`
+- [x] 자동 보안 업데이트(`unattended-upgrades` active) 및 SSH 비밀번호 로그인 비활성화(`PasswordAuthentication no`, `KbdInteractiveAuthentication no`) 확인
 
 ### Phase 3: Screening Firewall (OCI Security List)
 | 포트 | 출발지 | 용도 |

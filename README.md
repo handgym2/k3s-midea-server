@@ -179,7 +179,7 @@ midea server/
 
 - [x] **Phase 0**: Oracle Cloud 가입 및 리전/이미지 선택 (`Ubuntu 24.04 Minimal aarch64`)
 - [x] **Phase 1**: Ampere A1 인스턴스 확보, 공인 IP 할당(`147.224.xx.xx`), 2 OCPU / 12GB 스케일업
-- [x] **Phase 2 (진행 중)**: SSH 접속 성공 및 필수 관리 유틸 7종 설치 / OCI `iptables` 80·443 허용 남음
+- [x] **Phase 2**: SSH 접속, OS 패키지 업그레이드·보안 업데이트(`unattended-upgrades`), `iptables` 80/443 및 K3s CIDR 허용(`netfilter-persistent save`) 완료
 - [ ] **Phase 3**: Screening Firewall (OCI Security List) 포트 규칙 구성 및 외부 `nmap` 점검
 - [ ] **Phase 4**: k3s 단일 노드 클러스터 설치 및 `dmz` / `internal` 네임스페이스 분리
 - [ ] **Phase 5**: `rclone` pCloud 연동 및 systemd 자동 마운트 (`--vfs-cache-max-size 30G`)
