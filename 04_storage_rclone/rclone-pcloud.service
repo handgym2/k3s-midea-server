@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/rclone mount "pcloud:Anime/일 반  애 니" /mnt/pcloud \
+ExecStart=/usr/bin/rclone mount "pcloud:Anime/일반애니" /mnt/pcloud \
     --config=/etc/rclone/rclone.conf \
     --allow-other \
     --read-only \

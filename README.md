@@ -231,6 +231,27 @@ kubectl get pods -A
 
 ---
 
+### 4.7 Jellyfin DMZ 배포 및 SA 토큰 비활성화 (`automountServiceAccountToken: false`)
+
+외부 공개 구역(`dmz`)에 배치된 [02_jellyfin.yaml](./03_kubernetes_k3s/manifests/02_jellyfin.yaml)에 대해 읽기 전용 미디어 마운트(`/media`, `readOnly: true`)와 함께 **ServiceAccount 토큰 자동 마운트 비활성화(`automountServiceAccountToken: false`)**를 적용했습니다.
+
+* **설정 목적**: 기본적으로 쿠버네티스는 모든 파드 내부 `/var/run/secrets/kubernetes.io/serviceaccount/` 경로에 `token`(K8s API 인증용 JWT), `ca.crt`, `namespace` 파일을 자동 마운트합니다. `automountServiceAccountToken: false`를 설정하면 출력만 가리는 것이 아니라 **이 폴더와 토큰 파일 자체를 파드 내부에 생성하지 않아**, DMZ 파드가 탈취되더라도 공격자가 토큰을 탈취해 K8s API 서버(`6443`)에 접근·횡적 이동하는 경로를 원천 차단합니다.
+
+| 확인 명령어 | 적용 전 (기본값 / `true`) | 적용 후 (`automountServiceAccountToken: false`) |
+| :--- | :--- | :--- |
+| `ls -la /var/run/secrets/kubernetes.io/serviceaccount` | `ca.crt`, `namespace`, `token` 파일 존재 | `No such file or directory` (마운트 자체 제거) |
+| `cat /var/run/secrets/kubernetes.io/serviceaccount/token` | `eyJhbGci...` 실제 JWT 토큰 값 출력 | `No such file or directory` (토큰 파일 없음) |
+| 파드 내 K8s API(`https://kubernetes.default.svc`) 호출 | 토큰을 읽어 API 인증 시도 가능 | 인증용 토큰 부재로 API 접근 원천 차단 |
+| `kubectl get pod -n dmz <파드> -o yaml` | `automountServiceAccountToken` 미설정 | `automountServiceAccountToken: false` 표시 |
+
+```bash
+# 설정값 및 파드 내부 SA 토큰 미마운트 검증
+sudo kubectl get deployment jellyfin -n dmz -o jsonpath='{.spec.template.spec.automountServiceAccountToken}{"\n"}'
+sudo kubectl exec -n dmz -l app=jellyfin -- ls -la /var/run/secrets/kubernetes.io/serviceaccount
+```
+
+---
+
 ## 5. 디렉토리 구조 (Repository Structure)
 
 > ※ 보안 정책(`.gitignore`)에 따라 SSH 비밀키(`*.key`, `*.ppk`), 공개키(`*.pub`), 클라우드 인증 정보(`rclone.conf`)는 저장소에 업로드되지 않습니다.

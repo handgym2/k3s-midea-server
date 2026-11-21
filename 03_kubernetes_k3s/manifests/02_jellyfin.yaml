@@ -19,6 +19,7 @@ spec:
         zone: dmz
         security-tier: public-facing
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: jellyfin
         image: jellyfin/jellyfin:latest
@@ -28,19 +29,25 @@ spec:
           name: http
         resources:
           requests:
-            cpu: 200m
-            memory: 512Mi
+            cpu: 500m
+            memory: 1024Mi
           limits:
-            cpu: 1500m
-            memory: 2048Mi
+            cpu: 3800m
+            memory: 8192Mi
         volumeMounts:
         - name: media-storage
           mountPath: /media
           readOnly: true
+          mountPropagation: HostToContainer
         - name: jellyfin-config
           mountPath: /config
         - name: jellyfin-cache
           mountPath: /cache
+        - name: jellyfin-fonts
+          mountPath: /fonts
+        - name: system-fonts
+          mountPath: /usr/share/fonts/truetype/custom
+          readOnly: true
       volumes:
       - name: media-storage
         hostPath:
@@ -53,6 +60,14 @@ spec:
       - name: jellyfin-cache
         hostPath:
           path: /opt/jellyfin/cache
+          type: DirectoryOrCreate
+      - name: jellyfin-fonts
+        hostPath:
+          path: /opt/jellyfin/fonts
+          type: DirectoryOrCreate
+      - name: system-fonts
+        hostPath:
+          path: /opt/jellyfin/fonts
           type: DirectoryOrCreate
 ---
 apiVersion: v1
