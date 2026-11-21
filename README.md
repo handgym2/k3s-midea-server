@@ -247,8 +247,33 @@ kubectl get pods -A
 ```bash
 # 설정값 및 파드 내부 SA 토큰 미마운트 검증
 sudo kubectl get deployment jellyfin -n dmz -o jsonpath='{.spec.template.spec.automountServiceAccountToken}{"\n"}'
-sudo kubectl exec -n dmz -l app=jellyfin -- ls -la /var/run/secrets/kubernetes.io/serviceaccount
+sudo kubectl exec -n dmz deployment/jellyfin -- ls -la /var/run/secrets/kubernetes.io/serviceaccount
 ```
+
+---
+
+### 4.8 Jellyfin `non-root` 실행 전환 및 최소 권한 보안 강화 (`securityContext`)
+
+외부 공개 구역(`dmz`)에 배치된 Jellyfin 컨테이너가 기본적으로 `root(uid=0)` 권한으로 실행되던 상태를 **일반 사용자(`uid=1000`, `gid=1000`) 권한**으로 전환하고, 권한 상승 및 불필요한 커널 특권(`Capabilities`)을 모두 제거했습니다.
+
+* **해야 하는 이유**:
+  * Jellyfin은 미디어 스트리밍 애플리케이션일 뿐 시스템 관리자(`root`) 권한이나 커널 특권이 전혀 필요하지 않습니다.
+  * 외부에 직접 노출되는 DMZ 파드에 최소 권한 원칙(Principle of Least Privilege)을 적용해, 앱 취약점이 악용되더라도 공격자를 일반 사용자(`uid=1000`) 권한 안에 가두기 위함입니다.
+
+* **하지 않았을 때 발생할 수 있는 상황**:
+  1. **컨테이너 탈출(Container Escape) 시 호스트 장악 위험**: 컨테이너 내부 `root(uid=0)`는 호스트와 동일한 커널을 공유하므로, 런타임/커널 취약점이 뚫릴 경우 호스트(`k3s-main`) 전체 제어권 위협으로 직결됩니다.
+  2. **`hostPath` 마운트 영역을 통한 호스트 파일 변조**: `/opt/jellyfin/{config,cache,fonts}`가 호스트에 직접 연결되어 있어, 앱 RCE/파일 쓰기 취약점 발생 시 `root` 소유의 악성 파일이나 `setuid` 바이너리를 심는 등 호스트 영역까지 침해될 수 있습니다.
+  3. **커널 특권(`Capabilities`) 및 권한 상승 악용**: `allowPrivilegeEscalation: false` 및 `capabilities: drop: ["ALL"]`가 없으면, 남아 있는 커널 특권(`NET_RAW` 등)을 이용해 내부망(`10.42.0.0/16`, `10.43.0.0/16`) 스니핑·정찰 발판으로 삼을 수 있습니다.
+
+* **적용 절차 및 검증 결과**:
+  1. 호스트 쓰기 볼륨(`/opt/jellyfin/config`, `/cache`, `/fonts`) 소유권을 `1000:1000`으로 사전 변경 (`sudo chown -R 1000:1000 ...`), `/mnt/pcloud`는 `rclone --allow-other`로 일반 유저 읽기 허용 확인
+  2. [02_jellyfin.yaml](./03_kubernetes_k3s/manifests/02_jellyfin.yaml)에 Pod 수준(`runAsNonRoot: true`, `runAsUser: 1000`, `runAsGroup: 1000`, `fsGroup: 1000`) 및 Container 수준(`allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`) 적용 후 배포
+
+| 검증 항목 | 적용 전 (Before) | 적용 후 (After) |
+| :--- | :--- | :--- |
+| `sudo kubectl exec -n dmz deployment/jellyfin -- id` | `uid=0(root) gid=0(root)` | `uid=1000 gid=1000 groups=1000` |
+| `sudo kubectl exec -n dmz deployment/jellyfin -- ls /media` | 정상 조회 | 정상 조회 (`--allow-other`) |
+| `sudo kubectl exec -n dmz deployment/jellyfin -- touch /media/test_ro` | `Read-only file system` 차단 | `Read-only file system` 차단 (`non-root` + `readOnly` 이중 보호) |
 
 ---
 
